@@ -110,6 +110,10 @@ jobs:
 # =============================================================================
 workflows:
   api-build-test-deploy:
+    # Auto-rerun up to 5 times on failure — builds up flaky test data
+    # in CircleCI Insights for automatic flaky test detection.
+    # Docs: https://circleci.com/docs/guides/orchestrate/automatic-reruns/
+    max_auto_reruns: 5
     jobs:
       - test:
           name: "API Tests (split)"

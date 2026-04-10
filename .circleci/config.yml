@@ -1,0 +1,41 @@
+# =============================================================================
+# Dynamic Config — Setup Workflow (Path Filtering)
+# =============================================================================
+# Demonstrates CircleCI's dynamic configuration for monorepo pipelines.
+# This setup workflow detects which directories changed in a commit and
+# passes parameters to a continuation config that only builds the
+# affected services.
+#
+# Example: a commit touching only api/ will build and test only the API
+# service, saving compute and time. A commit touching shared/ rebuilds
+# all services since shared code affects everything.
+#
+# This is a fifth pipeline definition alongside the per-service pipelines,
+# showing an alternative approach to multi-service orchestration.
+#
+# Docs:
+#   Dynamic config:  https://circleci.com/docs/guides/orchestrate/dynamic-config/
+#   Path filtering:  https://circleci.com/developer/orbs/orb/circleci/path-filtering
+# =============================================================================
+
+version: 2.1
+
+setup: true
+
+orbs:
+  path-filtering: circleci/path-filtering@1.1.0
+
+workflows:
+  detect-changes:
+    jobs:
+      - path-filtering/filter:
+          name: "Detect Changed Services"
+          mapping: |
+            api/.* run-api true
+            worker/.* run-worker true
+            web/.* run-web true
+            shared/.* run-api true
+            shared/.* run-worker true
+            shared/.* run-web true
+          base-revision: main
+          config-path: .circleci/continue-config.yml

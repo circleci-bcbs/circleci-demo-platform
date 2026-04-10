@@ -82,6 +82,7 @@ jobs:
 
 workflows:
   worker-build-test-deploy:
+    max_auto_reruns: 5
     jobs:
       - test:
           name: "Worker Tests (split)"
