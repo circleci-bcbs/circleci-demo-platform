@@ -15,6 +15,9 @@ version: 2.1
 orbs:
   python: circleci/python@2.1.1
   docker: circleci/docker@2.8.2
+  # Shared URL orb — common commands used across all BCBSM projects
+  # Docs: https://circleci.com/docs/orbs/author/create-test-and-use-url-orbs/
+  platform: https://raw.githubusercontent.com/circleci-bcbs/shared-orbs/main/bcbsm-platform-tools.yml
 
 # =============================================================================
 # JOBS
@@ -77,33 +80,26 @@ jobs:
           destination: image-digest
 
   # --- Deploy ---
-  # Placeholder deploy with deploy markers for tracking.
+  # Uses shared platform orb for deploy markers and notifications.
   deploy:
-    docker:
-      - image: cimg/base:current
+    executor: platform/base
     steps:
-      - run:
-          name: Plan deployment
-          command: |
-            circleci run release plan api-deploy \
-              --environment-name="DEV" \
-              --component-name="api" \
-              --target-version="${CIRCLE_SHA1:0:7}"
+      - platform/deploy-marker-plan:
+          deploy-name: "api-deploy"
+          environment-name: "DEV"
+          component-name: "api"
+          target-version: "${CIRCLE_SHA1:0:7}"
+      - platform/deploy-marker-update:
+          deploy-name: "api-deploy"
+          status: "RUNNING"
       - run:
           name: Deploy API service
           command: |
             echo "Deploying API service..."
             echo "Image: circleci-demo-platform/api:${CIRCLE_SHA1:0:7}"
             echo "[SANDBOX] Deploy complete."
-            # In production: kubectl apply, aws ecs update-service, etc.
-      - run:
-          name: Finalize deploy marker (success)
-          command: circleci run release update api-deploy --status=SUCCESS
-          when: on_success
-      - run:
-          name: Finalize deploy marker (failed)
-          command: circleci run release update api-deploy --status=FAILED
-          when: on_fail
+      - platform/deploy-marker-finalize:
+          deploy-name: "api-deploy"
 
 # =============================================================================
 # WORKFLOWS
