@@ -37,8 +37,7 @@ jobs:
       - run:
           name: Run API tests with splitting
           command: |
-            cd api
-            TEST_FILES=$(circleci tests glob "tests/test_*.py" | circleci tests split --split-by=timings)
+            TEST_FILES=$(circleci tests glob "api/tests/test_*.py" | circleci tests split --split-by=timings)
             echo "Running tests: ${TEST_FILES}"
             mkdir -p /tmp/test-results
             python -m pytest ${TEST_FILES} \
