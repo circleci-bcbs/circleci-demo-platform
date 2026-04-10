@@ -101,3 +101,4 @@ def _validate_item(data: dict) -> list[str]:
 if __name__ == "__main__":
     app.run(host=config["host"], port=config["port"], debug=config["debug"])
 
+# api v0.1.1
