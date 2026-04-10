@@ -1,23 +1,30 @@
 # =============================================================================
-# Scale Demo Pipeline
+# Parallelism at Scale — On-Demand Compute Pipeline
 # =============================================================================
-# Demonstrates CircleCI's ability to spin up containers at scale.
-# Set parallelism to any value (10, 25, 50, 100) to show concurrency.
+# Validates CircleCI's ability to provision large container fleets instantly.
+# Set parallelism to any value (10, 25, 50, 100+) to verify concurrency
+# capacity and measure container spin-up time across the fleet.
 #
-# Trigger this pipeline manually via the API/UI to demonstrate
-# instant compute scaling with zero queue time.
+# Intended for manual trigger via the API or UI. Not part of the standard
+# CI/CD workflow — used during capacity planning and platform evaluation.
 #
 # Docs:
-#   Parallelism: https://circleci.com/docs/guides/optimize/parallelism-faster-jobs/
+#   Parallelism:     https://circleci.com/docs/guides/optimize/parallelism-faster-jobs/
 #   Resource classes: https://circleci.com/docs/reference/configuration-reference/#resourceclass
 # =============================================================================
 
 version: 2.1
 
+# =============================================================================
+# JOBS
+# =============================================================================
 jobs:
 
-  # Spins up N parallel containers simultaneously.
-  # Each container runs a simple task to demonstrate concurrency.
+  # --- Scale validation ---
+  # Provisions N parallel containers simultaneously. Each container logs its
+  # index, total fleet size, and timestamp so you can verify all containers
+  # started and compare spin-up times across the fleet.
+  # Uses resource_class: small to minimize credit cost during validation.
   scale-test:
     docker:
       - image: cimg/base:current
@@ -28,23 +35,26 @@ jobs:
           name: "Container ${CIRCLE_NODE_INDEX} of ${CIRCLE_NODE_TOTAL}"
           command: |
             echo "============================================="
-            echo " Scale Demo - Container ${CIRCLE_NODE_INDEX} of ${CIRCLE_NODE_TOTAL}"
+            echo " Scale Validation - Container ${CIRCLE_NODE_INDEX} of ${CIRCLE_NODE_TOTAL}"
             echo "============================================="
             echo "Node index:    ${CIRCLE_NODE_INDEX}"
             echo "Total nodes:   ${CIRCLE_NODE_TOTAL}"
             echo "Build number:  ${CIRCLE_BUILD_NUM}"
             echo "Timestamp:     $(date -u +%Y-%m-%dT%H:%M:%SZ)"
             echo ""
-            echo "This container spun up with zero queue time."
-            echo "CircleCI scales compute on demand — no capacity"
-            echo "planning or shared agent pools needed."
+            echo "This container was provisioned on demand with no queue time."
+            echo "CircleCI scales compute elastically — no capacity planning"
+            echo "or shared agent pools required."
             echo ""
             # Simulate a small workload
             sleep $((RANDOM % 5 + 1))
             echo "Task complete on container ${CIRCLE_NODE_INDEX}."
 
+# =============================================================================
+# WORKFLOWS
+# =============================================================================
 workflows:
-  scale-demonstration:
+  scale-validation:
     jobs:
       - scale-test:
-          name: "Scale Test (50 containers)"
+          name: "Scale Validation (50 containers)"

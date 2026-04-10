@@ -2,18 +2,30 @@
 # API Service Pipeline
 # =============================================================================
 # Builds, tests, and packages the Flask REST API service.
-# Features: test splitting, Docker Layer Caching, deploy markers.
+#
+# Features:
+#   - Test splitting across parallel containers to reduce wall-clock test time
+#   - Docker Layer Caching (DLC) to avoid rebuilding unchanged image layers
+#   - Deploy markers for release tracking in CircleCI Releases
+#   - Automatic reruns to surface flaky tests in Insights
 #
 # Docs:
 #   Test splitting:  https://circleci.com/docs/guides/optimize/parallelism-faster-jobs/
 #   DLC:             https://circleci.com/docs/guides/optimize/docker-layer-caching/
 #   Deploy markers:  https://circleci.com/docs/guides/deploy/configure-deploy-markers/
+#   Auto reruns:     https://circleci.com/docs/guides/orchestrate/automatic-reruns/
+#   URL orbs:        https://circleci.com/docs/orbs/use/orb-intro/#url-orbs
 # =============================================================================
 
 version: 2.1
 
-# Parameters passed by the path-filtering orb from the setup workflow.
-# Must be declared here even if not used, otherwise the continuation fails.
+# =============================================================================
+# PIPELINE PARAMETERS
+# Docs: https://circleci.com/docs/guides/orchestrate/pipeline-variables/
+# =============================================================================
+# Parameters injected by the path-filtering orb from the setup workflow.
+# Every continuation config must declare the full set of parameters even if
+# only a subset is relevant — omitting any causes the continuation to fail.
 parameters:
   run-api:
     type: boolean
@@ -28,11 +40,21 @@ parameters:
     type: boolean
     default: false
 
+# =============================================================================
+# ORBS
+# Docs: https://circleci.com/docs/orbs/use/orb-intro/
+# =============================================================================
 orbs:
+  # Python convenience commands (install-packages, cache management).
+  # See: https://circleci.com/developer/orbs/orb/circleci/python
   python: circleci/python@2.1.1
+  # Docker build/push helpers and remote Docker setup.
+  # See: https://circleci.com/developer/orbs/orb/circleci/docker
   docker: circleci/docker@2.8.2
-  # Shared URL orb — common commands used across all BCBSM projects
-  # Docs: https://circleci.com/docs/orbs/author/create-test-and-use-url-orbs/
+  # Shared URL orb — reusable commands and executors maintained centrally.
+  # URL orbs are fetched at pipeline compile time from a remote YAML file,
+  # allowing updates without publishing to the orb registry.
+  # Docs: https://circleci.com/docs/orbs/use/orb-intro/#url-orbs
   platform: https://raw.githubusercontent.com/circleci-bcbs/shared-orbs/main/bcbsm-platform-tools.yml
 
 # =============================================================================
@@ -42,8 +64,9 @@ jobs:
 
   # --- Test with splitting ---
   # Splits pytest tests across parallel containers by timing data.
-  # On first run, tests split by file name. After timing data is collected,
-  # subsequent runs split by duration for optimal balance.
+  # On first run (no timing data available), tests split alphabetically by
+  # file name. After timing data is collected from store_test_results,
+  # subsequent runs split by historical duration for optimal balance.
   test:
     docker:
       - image: cimg/python:3.12
@@ -62,6 +85,8 @@ jobs:
             python -m pytest ${TEST_FILES} \
               --junitxml=/tmp/test-results/api-results.xml \
               -v
+      # Upload results so CircleCI can track timing data for intelligent
+      # splitting and surface test failures in the Tests tab.
       - store_test_results:
           path: /tmp/test-results
       - store_artifacts:
@@ -69,8 +94,9 @@ jobs:
           destination: test-results
 
   # --- Build Docker image ---
-  # Uses Docker Layer Caching to speed up image builds.
-  # Pushes to a registry (or stores as artifact in sandbox).
+  # Uses Docker Layer Caching (DLC) to skip rebuilding unchanged layers,
+  # reducing typical build times from minutes to seconds on cache hit.
+  # In production, the image would be pushed to ECR/DockerHub/Artifactory.
   build-image:
     docker:
       - image: cimg/base:current
@@ -96,7 +122,10 @@ jobs:
           destination: image-digest
 
   # --- Deploy ---
-  # Uses shared platform orb for deploy markers and notifications.
+  # Records a deploy marker in CircleCI Releases via the shared platform orb.
+  # Deploy markers provide an audit trail: which SHA was deployed, to which
+  # environment, and whether the deploy succeeded or failed.
+  # Docs: https://circleci.com/docs/guides/deploy/configure-deploy-markers/
   deploy:
     executor: platform/base
     steps:
@@ -122,8 +151,9 @@ jobs:
 # =============================================================================
 workflows:
   api-build-test-deploy:
-    # Auto-rerun up to 5 times on failure — builds up flaky test data
-    # in CircleCI Insights for automatic flaky test detection.
+    # Auto-rerun up to 5 times on infrastructure or test failure.
+    # Failed-then-passed runs are flagged as flaky in CircleCI Insights,
+    # building data for automatic flaky test detection over time.
     # Docs: https://circleci.com/docs/guides/orchestrate/automatic-reruns/
     max_auto_reruns: 5
     jobs:

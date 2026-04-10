@@ -23,7 +23,12 @@ version: 2.1
 
 setup: true
 
+# =============================================================================
+# ORBS
+# =============================================================================
 orbs:
+  # Evaluates changed file paths and selects the correct continuation config.
+  # See: https://circleci.com/developer/orbs/orb/circleci/path-filtering
   path-filtering: circleci/path-filtering@3.0.0
 
 workflows:

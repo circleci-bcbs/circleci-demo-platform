@@ -1,14 +1,27 @@
 # =============================================================================
 # No Updates — Fallback Config
 # =============================================================================
-# Used by the dynamic config setup workflow when no service paths match
-# the changed files (e.g., .circleci/ or README changes only).
-# Runs a no-op job that consumes no credits and completes instantly.
-# Docs: https://circleci.com/docs/reference/configuration-reference/#job-type
+# Selected by the dynamic config setup workflow when no service directories
+# (api/, worker/, web/, shared/) contain changed files. This happens for
+# commits that only touch CI config, documentation, or repository metadata.
+#
+# Uses CircleCI's built-in no-op job type, which completes instantly and
+# consumes zero credits — the pipeline succeeds without running any compute.
+#
+# Docs:
+#   No-op jobs:      https://circleci.com/docs/reference/configuration-reference/#job-type
+#   Dynamic config:  https://circleci.com/docs/guides/orchestrate/dynamic-config/
 # =============================================================================
 
 version: 2.1
 
+# =============================================================================
+# PIPELINE PARAMETERS
+# Docs: https://circleci.com/docs/guides/orchestrate/pipeline-variables/
+# =============================================================================
+# Parameters injected by the path-filtering orb from the setup workflow.
+# Every continuation config must declare the full set of parameters even if
+# only a subset is relevant — omitting any causes the continuation to fail.
 parameters:
   run-api:
     type: boolean
@@ -23,10 +36,17 @@ parameters:
     type: boolean
     default: false
 
+# =============================================================================
+# JOBS
+# =============================================================================
 jobs:
+  # Built-in no-op job type — no executor is provisioned, no credits consumed.
   no-service-changes:
     type: no-op
 
+# =============================================================================
+# WORKFLOWS
+# =============================================================================
 workflows:
   no-updates:
     jobs:
