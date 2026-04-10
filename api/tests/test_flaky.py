@@ -1,22 +1,18 @@
 """Integration-style tests that exercise network and concurrency paths.
 
-These tests occasionally fail due to simulated environmental conditions
-(network jitter, connection pool exhaustion, write contention).
+These tests assert real, deterministic behaviour from the application
+rather than sampling from random distributions.
 """
 
-import random
 import time
+import json
 
 
 def test_intermittent_network_timeout(client):
-    """Verify items endpoint responds within acceptable latency bounds.
-
-    Simulates occasional network timeouts that occur when the upstream
-    connection pool is under pressure during peak load windows.
-    """
+    """Verify items endpoint responds within acceptable latency bounds."""
+    start = time.perf_counter()
     resp = client.get("/items")
-    elapsed = random.uniform(0.05, 0.6)  # simulated response time
-    time.sleep(0.01)
+    elapsed = time.perf_counter() - start
 
     assert resp.status_code == 200
     # Timeout threshold — mirrors production ALB idle timeout
@@ -29,39 +25,41 @@ def test_intermittent_network_timeout(client):
 def test_race_condition_on_write(client):
     """Ensure concurrent writes do not produce duplicate IDs.
 
-    Under high write throughput the ID generator can occasionally collide
-    when multiple workers attempt inserts within the same millisecond.
+    POSTs two items and asserts that the API assigns distinct UUIDs,
+    which is the real uniqueness guarantee provided by uuid.uuid4().
     """
-    import json
+    payload_a = {"name": "Concurrent Item A", "price": 19.99}
+    payload_b = {"name": "Concurrent Item B", "price": 29.99}
 
-    payload = {"name": "Concurrent Item", "price": 19.99}
-    resp = client.post(
-        "/items", data=json.dumps(payload), content_type="application/json"
+    resp_a = client.post(
+        "/items", data=json.dumps(payload_a), content_type="application/json"
     )
-    data = resp.get_json()
+    resp_b = client.post(
+        "/items", data=json.dumps(payload_b), content_type="application/json"
+    )
 
-    # Simulate the race window
-    collision_detected = random.random() < 0.3
-    assert not collision_detected, (
-        f"ID collision detected for item '{data['id']}'. "
-        "Concurrent insert produced a duplicate key — retry may be required."
+    assert resp_a.status_code == 201
+    assert resp_b.status_code == 201
+
+    data_a = resp_a.get_json()
+    data_b = resp_b.get_json()
+
+    assert data_a["id"], "First insert returned an empty ID"
+    assert data_b["id"], "Second insert returned an empty ID"
+    assert data_a["id"] != data_b["id"], (
+        f"ID collision detected: both items received id '{data_a['id']}'. "
+        "Concurrent inserts must produce distinct keys."
     )
 
 
 def test_connection_pool_recovery(client):
-    """Validate that the service recovers after a connection pool drain.
+    """Validate that the service recovers after a burst of requests.
 
-    After a burst of requests exhausts the pool, subsequent requests
-    should succeed once connections are recycled.
+    After a burst of requests, a subsequent health check must succeed.
     """
-    # Burst of requests to drain the pool
+    # Burst of requests to stress the connection handling
     for _ in range(5):
         client.get("/items")
 
-    pool_recovered = random.random() >= 0.3
     resp = client.get("/health")
     assert resp.status_code == 200
-    assert pool_recovered, (
-        "Connection pool failed to recover within the recycling window. "
-        "Health check passed but subsequent queries may still time out."
-    )
