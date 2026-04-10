@@ -41,29 +41,29 @@ A single automatic trigger watches for pushes. A setup workflow detects which se
 ```mermaid
 flowchart TD
     A[Push to main] --> B[Setup Workflow]
-    B --> C{Path Filtering}
+    B --> C{Path Filtering:<br/>What changed?}
 
-    C -->|api/ changed| D[api-pipeline.yml]
-    C -->|worker/ changed| E[worker-pipeline.yml]
-    C -->|web/ changed| F[web-pipeline.yml]
-    C -->|shared/ changed| G[All service pipelines]
-    C -->|No service paths| G2[No-op]
+    C -->|api/| D[API Pipeline]
+    C -->|worker/| E[Worker Pipeline]
+    C -->|web/| F[Web Pipeline]
+    C -->|shared/| D
+    C -->|shared/| E
+    C -->|shared/| F
+    C -->|No service paths| G2[No-op<br/>Zero credits]
 
-    D --> H[Tests across 4 containers]
-    E --> I[Tests across 2 containers]
-    F --> J[Tests across 2 containers]
-
-    H --> K[Docker Build]
-    I --> K
-    J --> K
-    K --> L[Deploy]
+    D --> D1[Test split x4] --> D2[Docker Build + DLC] --> D3[Deploy]
+    E --> E1[Test split x2] --> E2[Docker Build + DLC] --> E3[Deploy]
+    F --> F1[Test split x2] --> F2[Docker Build + DLC] --> F3[Deploy]
 
     style B fill:#3498db,color:#fff
     style C fill:#9b59b6,color:#fff
-    style H fill:#2ecc71,color:#fff
-    style I fill:#2ecc71,color:#fff
-    style J fill:#2ecc71,color:#fff
-    style L fill:#f39c12,color:#fff
+    style D1 fill:#2ecc71,color:#fff
+    style E1 fill:#2ecc71,color:#fff
+    style F1 fill:#2ecc71,color:#fff
+    style D3 fill:#f39c12,color:#fff
+    style E3 fill:#f39c12,color:#fff
+    style F3 fill:#f39c12,color:#fff
+    style G2 fill:#95a5a6,color:#fff
 ```
 
 ### Pipeline Definitions
@@ -75,12 +75,14 @@ flowchart TD
 | `worker-pipeline` | `.circleci/worker-pipeline.yml` | Manual / routed | Test splitting (parallelism: 2), Docker layer caching |
 | `web-pipeline` | `.circleci/web-pipeline.yml` | Manual / routed | Test splitting (parallelism: 2), Docker layer caching |
 | `scale-demo` | `.circleci/scale-demo.yml` | Manual | CI infrastructure load test — 50 parallel containers |
+| — | `.circleci/no-updates.yml` | Fallback | No-op job when no service paths match — consumes zero credits |
 
 ### Key Engineering Decisions
 
 | Decision | Rationale | Docs |
 |---|---|---|
-| **Dynamic config with path-filtering** | Avoids building all services on every push. Only changed services run. | [Dynamic Config](https://circleci.com/docs/guides/orchestrate/dynamic-config/) |
+| **Dynamic config with path-filtering** | Avoids building all services on every push. Only changed services run. Changes to `shared/` rebuild all three. | [Dynamic Config](https://circleci.com/docs/guides/orchestrate/dynamic-config/) |
+| **No-op fallback** | Non-service changes (docs, config) run a no-op job that consumes zero credits | [No-op Jobs](https://circleci.com/docs/reference/configuration-reference/#job-type) |
 | **Test splitting by timing** | 54 tests across the platform — splitting by historical timing balances container load | [Parallelism](https://circleci.com/docs/guides/optimize/parallelism-faster-jobs/) |
 | **Docker layer caching** | Multi-stage Python Dockerfiles benefit from layer reuse between builds | [DLC](https://circleci.com/docs/guides/optimize/docker-layer-caching/) |
 | **Auto-reruns (max: 5)** | Flaky tests from external dependencies don't block the pipeline permanently | [Auto-Reruns](https://circleci.com/docs/guides/orchestrate/automatic-reruns/) |
