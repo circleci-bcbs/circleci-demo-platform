@@ -1,23 +1,22 @@
 # =============================================================================
 # Dynamic Config — Setup Workflow (Path Filtering)
 # =============================================================================
-# This is the only triggered pipeline. On every push, this setup workflow
-# detects which directories changed and selects the right service config
-# to run as the continuation.
+# The only auto-triggered pipeline. Detects which service directories have
+# changed files and routes to the correct service config as a continuation.
 #
-# Path -> Config file mapping:
-#   api/    -> .circleci/api-pipeline.yml
-#   worker/ -> .circleci/worker-pipeline.yml
-#   web/    -> .circleci/web-pipeline.yml
-#   shared/ -> all three (shared code affects every service)
+# Routing:
+#   api/    -> api-pipeline.yml
+#   worker/ -> worker-pipeline.yml
+#   web/    -> web-pipeline.yml
+#   shared/ -> all three service configs (shared code affects every service)
+#   other   -> no-updates.yml (no-op, consumes no credits)
 #
-# The per-service pipeline definitions still exist for manual API/UI
-# triggers, but have no automatic triggers. The scale-demo pipeline
-# is also manual-only.
+# Per-service pipeline definitions remain for manual API/UI triggers.
 #
 # Docs:
 #   Dynamic config:  https://circleci.com/docs/guides/orchestrate/dynamic-config/
 #   Path filtering:  https://circleci.com/developer/orbs/orb/circleci/path-filtering
+#   No-op jobs:      https://circleci.com/docs/reference/configuration-reference/#job-type
 # =============================================================================
 
 version: 2.1
@@ -32,14 +31,15 @@ workflows:
     jobs:
       - path-filtering/filter:
           name: "Detect Changed Services"
-          # Fourth column selects the continuation config file.
-          # When multiple paths match, configs are merged.
-          # When no service paths match (e.g., .circleci/ changes only),
-          # the default config-path is used as a fallback.
+          # Fourth column selects the continuation config file per match.
+          # shared/ maps to all three service configs so every service rebuilds.
+          # When no paths match, config-path (no-updates.yml) is used as fallback.
           mapping: |
             api/.* run-api true .circleci/api-pipeline.yml
             worker/.* run-worker true .circleci/worker-pipeline.yml
             web/.* run-web true .circleci/web-pipeline.yml
             shared/.* run-all true .circleci/api-pipeline.yml
+            shared/.* run-all true .circleci/worker-pipeline.yml
+            shared/.* run-all true .circleci/web-pipeline.yml
           base-revision: main
-          config-path: .circleci/api-pipeline.yml
+          config-path: .circleci/no-updates.yml

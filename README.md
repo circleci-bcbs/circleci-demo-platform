@@ -15,7 +15,8 @@ platform-services/
 │   ├── api-pipeline.yml      # API build, test, deploy
 │   ├── worker-pipeline.yml   # Worker build, test, deploy
 │   ├── web-pipeline.yml      # Web build, test, deploy
-│   └── scale-demo.yml        # CI infrastructure load test
+│   ├── scale-demo.yml        # CI infrastructure load test
+│   └── no-updates.yml        # No-op fallback when no service paths change
 ├── api/                      # REST API (backend)
 ├── worker/                   # Background task processor
 ├── web/                      # Frontend
@@ -46,6 +47,7 @@ flowchart TD
     C -->|worker/ changed| E[worker-pipeline.yml]
     C -->|web/ changed| F[web-pipeline.yml]
     C -->|shared/ changed| G[All service pipelines]
+    C -->|No service paths| G2[No-op]
 
     D --> H[Tests across 4 containers]
     E --> I[Tests across 2 containers]

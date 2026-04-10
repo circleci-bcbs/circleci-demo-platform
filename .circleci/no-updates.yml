@@ -1,0 +1,34 @@
+# =============================================================================
+# No Updates — Fallback Config
+# =============================================================================
+# Used by the dynamic config setup workflow when no service paths match
+# the changed files (e.g., .circleci/ or README changes only).
+# Runs a no-op job that consumes no credits and completes instantly.
+# Docs: https://circleci.com/docs/reference/configuration-reference/#job-type
+# =============================================================================
+
+version: 2.1
+
+parameters:
+  run-api:
+    type: boolean
+    default: false
+  run-worker:
+    type: boolean
+    default: false
+  run-web:
+    type: boolean
+    default: false
+  run-all:
+    type: boolean
+    default: false
+
+jobs:
+  no-service-changes:
+    type: no-op
+
+workflows:
+  no-updates:
+    jobs:
+      - no-service-changes:
+          name: "No service changes detected"

@@ -85,9 +85,10 @@ When code is pushed, the `dynamic-config` pipeline runs a setup workflow that co
 | `api/.*` | `api-pipeline.yml` |
 | `worker/.*` | `worker-pipeline.yml` |
 | `web/.*` | `web-pipeline.yml` |
-| `shared/.*` | All service pipelines |
+| `shared/.*` | All three service pipelines (shared code affects every service) |
+| No match | `no-updates.yml` (no-op job, consumes zero credits) |
 
-Only the affected service's pipeline runs. A commit that touches only `worker/` will build and test the worker service — the API and web services are skipped entirely.
+Only the affected service's pipeline runs. A commit that touches only `worker/` will build and test the worker service — the API and web services are skipped. A commit that only changes `.circleci/` or `README.md` runs a no-op job that completes instantly.
 
 ### Test splitting
 
