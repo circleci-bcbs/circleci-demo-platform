@@ -1,0 +1,96 @@
+# =============================================================================
+# Worker Service Pipeline
+# =============================================================================
+# Builds, tests, and packages the background worker service.
+# Same pattern as API pipeline: test splitting, DLC, deploy markers.
+# =============================================================================
+
+version: 2.1
+
+orbs:
+  python: circleci/python@2.1.1
+  docker: circleci/docker@2.8.2
+
+jobs:
+
+  test:
+    docker:
+      - image: cimg/python:3.12
+    parallelism: 2
+    steps:
+      - checkout
+      - python/install-packages:
+          pkg-manager: pip
+          pip-dependency-file: worker/requirements.txt
+      - run:
+          name: Run worker tests with splitting
+          command: |
+            cd worker
+            TEST_FILES=$(circleci tests glob "tests/test_*.py" | circleci tests split --split-by=timings)
+            echo "Running tests: ${TEST_FILES}"
+            mkdir -p /tmp/test-results
+            python -m pytest ${TEST_FILES} \
+              --junitxml=/tmp/test-results/worker-results.xml \
+              -v
+      - store_test_results:
+          path: /tmp/test-results
+      - store_artifacts:
+          path: /tmp/test-results
+          destination: test-results
+
+  build-image:
+    docker:
+      - image: cimg/base:current
+    steps:
+      - checkout
+      - setup_remote_docker:
+          docker_layer_caching: true
+      - run:
+          name: Build worker Docker image
+          command: |
+            cd worker
+            docker build -t circleci-demo-platform/worker:${CIRCLE_SHA1:0:7} .
+            docker build -t circleci-demo-platform/worker:latest .
+            echo "Image built: circleci-demo-platform/worker:${CIRCLE_SHA1:0:7}"
+      - store_artifacts:
+          path: /tmp/image-digest.txt
+          destination: image-digest
+
+  deploy:
+    docker:
+      - image: cimg/base:current
+    steps:
+      - run:
+          name: Plan deployment
+          command: |
+            circleci run release plan worker-deploy \
+              --environment-name="DEV" \
+              --component-name="worker" \
+              --target-version="${CIRCLE_SHA1:0:7}"
+      - run:
+          name: Deploy worker service
+          command: |
+            echo "Deploying worker service..."
+            echo "[SANDBOX] Deploy complete."
+      - run:
+          name: Finalize (success)
+          command: circleci run release update worker-deploy --status=SUCCESS
+          when: on_success
+      - run:
+          name: Finalize (failed)
+          command: circleci run release update worker-deploy --status=FAILED
+          when: on_fail
+
+workflows:
+  worker-build-test-deploy:
+    jobs:
+      - test:
+          name: "Worker Tests (split)"
+      - build-image:
+          name: "Worker Docker Build (DLC)"
+          requires:
+            - "Worker Tests (split)"
+      - deploy:
+          name: "Deploy Worker"
+          requires:
+            - "Worker Docker Build (DLC)"

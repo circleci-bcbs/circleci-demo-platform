@@ -1,0 +1,50 @@
+# =============================================================================
+# Scale Demo Pipeline
+# =============================================================================
+# Demonstrates CircleCI's ability to spin up containers at scale.
+# Set parallelism to any value (10, 25, 50, 100) to show concurrency.
+#
+# Trigger this pipeline manually via the API/UI to demonstrate
+# instant compute scaling with zero queue time.
+#
+# Docs:
+#   Parallelism: https://circleci.com/docs/guides/optimize/parallelism-faster-jobs/
+#   Resource classes: https://circleci.com/docs/reference/configuration-reference/#resourceclass
+# =============================================================================
+
+version: 2.1
+
+jobs:
+
+  # Spins up N parallel containers simultaneously.
+  # Each container runs a simple task to demonstrate concurrency.
+  scale-test:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    parallelism: 50
+    steps:
+      - run:
+          name: "Container ${CIRCLE_NODE_INDEX} of ${CIRCLE_NODE_TOTAL}"
+          command: |
+            echo "============================================="
+            echo " Scale Demo - Container ${CIRCLE_NODE_INDEX} of ${CIRCLE_NODE_TOTAL}"
+            echo "============================================="
+            echo "Node index:    ${CIRCLE_NODE_INDEX}"
+            echo "Total nodes:   ${CIRCLE_NODE_TOTAL}"
+            echo "Build number:  ${CIRCLE_BUILD_NUM}"
+            echo "Timestamp:     $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo ""
+            echo "This container spun up with zero queue time."
+            echo "CircleCI scales compute on demand — no capacity"
+            echo "planning or shared agent pools needed."
+            echo ""
+            # Simulate a small workload
+            sleep $((RANDOM % 5 + 1))
+            echo "Task complete on container ${CIRCLE_NODE_INDEX}."
+
+workflows:
+  scale-demonstration:
+    jobs:
+      - scale-test:
+          name: "Scale Test (50 containers)"

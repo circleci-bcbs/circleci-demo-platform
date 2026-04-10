@@ -1,0 +1,124 @@
+# =============================================================================
+# API Service Pipeline
+# =============================================================================
+# Builds, tests, and packages the Flask REST API service.
+# Features: test splitting, Docker Layer Caching, deploy markers.
+#
+# Docs:
+#   Test splitting:  https://circleci.com/docs/guides/optimize/parallelism-faster-jobs/
+#   DLC:             https://circleci.com/docs/guides/optimize/docker-layer-caching/
+#   Deploy markers:  https://circleci.com/docs/guides/deploy/configure-deploy-markers/
+# =============================================================================
+
+version: 2.1
+
+orbs:
+  python: circleci/python@2.1.1
+  docker: circleci/docker@2.8.2
+
+# =============================================================================
+# JOBS
+# =============================================================================
+jobs:
+
+  # --- Test with splitting ---
+  # Splits pytest tests across parallel containers by timing data.
+  # On first run, tests split by file name. After timing data is collected,
+  # subsequent runs split by duration for optimal balance.
+  test:
+    docker:
+      - image: cimg/python:3.12
+    parallelism: 4
+    steps:
+      - checkout
+      - python/install-packages:
+          pkg-manager: pip
+          pip-dependency-file: api/requirements.txt
+      - run:
+          name: Run API tests with splitting
+          command: |
+            cd api
+            TEST_FILES=$(circleci tests glob "tests/test_*.py" | circleci tests split --split-by=timings)
+            echo "Running tests: ${TEST_FILES}"
+            mkdir -p /tmp/test-results
+            python -m pytest ${TEST_FILES} \
+              --junitxml=/tmp/test-results/api-results.xml \
+              -v
+      - store_test_results:
+          path: /tmp/test-results
+      - store_artifacts:
+          path: /tmp/test-results
+          destination: test-results
+
+  # --- Build Docker image ---
+  # Uses Docker Layer Caching to speed up image builds.
+  # Pushes to a registry (or stores as artifact in sandbox).
+  build-image:
+    docker:
+      - image: cimg/base:current
+    steps:
+      - checkout
+      - setup_remote_docker:
+          docker_layer_caching: true
+      - run:
+          name: Build API Docker image
+          command: |
+            cd api
+            docker build -t circleci-demo-platform/api:${CIRCLE_SHA1:0:7} .
+            docker build -t circleci-demo-platform/api:latest .
+            echo "Image built: circleci-demo-platform/api:${CIRCLE_SHA1:0:7}"
+            # In production: docker push to ECR/DockerHub/Artifactory
+      - run:
+          name: Save image digest
+          command: |
+            docker inspect circleci-demo-platform/api:latest --format='{{.Id}}' > /tmp/image-digest.txt
+            cat /tmp/image-digest.txt
+      - store_artifacts:
+          path: /tmp/image-digest.txt
+          destination: image-digest
+
+  # --- Deploy ---
+  # Placeholder deploy with deploy markers for tracking.
+  deploy:
+    docker:
+      - image: cimg/base:current
+    steps:
+      - run:
+          name: Plan deployment
+          command: |
+            circleci run release plan api-deploy \
+              --environment-name="DEV" \
+              --component-name="api" \
+              --target-version="${CIRCLE_SHA1:0:7}"
+      - run:
+          name: Deploy API service
+          command: |
+            echo "Deploying API service..."
+            echo "Image: circleci-demo-platform/api:${CIRCLE_SHA1:0:7}"
+            echo "[SANDBOX] Deploy complete."
+            # In production: kubectl apply, aws ecs update-service, etc.
+      - run:
+          name: Finalize deploy marker (success)
+          command: circleci run release update api-deploy --status=SUCCESS
+          when: on_success
+      - run:
+          name: Finalize deploy marker (failed)
+          command: circleci run release update api-deploy --status=FAILED
+          when: on_fail
+
+# =============================================================================
+# WORKFLOWS
+# =============================================================================
+workflows:
+  api-build-test-deploy:
+    jobs:
+      - test:
+          name: "API Tests (split)"
+      - build-image:
+          name: "API Docker Build (DLC)"
+          requires:
+            - "API Tests (split)"
+      - deploy:
+          name: "Deploy API"
+          requires:
+            - "API Docker Build (DLC)"
