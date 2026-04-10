@@ -7,6 +7,22 @@
 
 version: 2.1
 
+# Parameters passed by the path-filtering orb from the setup workflow.
+# Must be declared here even if not used, otherwise the continuation fails.
+parameters:
+  run-worker:
+    type: boolean
+    default: false
+  run-api:
+    type: boolean
+    default: false
+  run-web:
+    type: boolean
+    default: false
+  run-all:
+    type: boolean
+    default: false
+
 orbs:
   python: circleci/python@2.1.1
   docker: circleci/docker@2.8.2
