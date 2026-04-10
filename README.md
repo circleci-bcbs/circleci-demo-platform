@@ -133,40 +133,48 @@ Services are configured via environment variables:
 
 ## CircleCI Configuration
 
-This project uses **five separate pipeline definitions** to demonstrate different CircleCI capabilities:
+This project uses **five pipeline definitions** with a single automatic trigger. On every push, the `dynamic-config` pipeline detects which services changed and selects the right config to run. Per-service pipelines remain available for manual API/UI triggers.
 
 ### Pipeline Definitions
 
 | Pipeline | Config File | Trigger | Key Features |
 |---|---|---|---|
-| `api-pipeline` | `.circleci/api-pipeline.yml` | All pushes | Test splitting (parallelism: 4), DLC, deploy markers via [URL orb](https://github.com/circleci-bcbs/shared-orbs), auto-rerun |
-| `worker-pipeline` | `.circleci/worker-pipeline.yml` | All pushes | Test splitting (parallelism: 2), DLC, auto-rerun |
-| `web-pipeline` | `.circleci/web-pipeline.yml` | All pushes | Test splitting (parallelism: 2), DLC |
+| `dynamic-config` | `.circleci/config.yml` | **All pushes** (only auto trigger) | Setup workflow with [path-filtering](https://circleci.com/developer/orbs/orb/circleci/path-filtering) — selects the right service config |
+| `api-pipeline` | `.circleci/api-pipeline.yml` | Manual only | Test splitting (parallelism: 4), DLC, deploy markers via [URL orb](https://github.com/circleci-bcbs/shared-orbs), auto-rerun |
+| `worker-pipeline` | `.circleci/worker-pipeline.yml` | Manual only | Test splitting (parallelism: 2), DLC, auto-rerun |
+| `web-pipeline` | `.circleci/web-pipeline.yml` | Manual only | Test splitting (parallelism: 2), DLC |
 | `scale-demo` | `.circleci/scale-demo.yml` | Manual only | Parallelism: 50 — demonstrates instant compute scaling |
-| `dynamic-config` | `.circleci/config.yml` | All pushes | Setup workflow with [path-filtering](https://circleci.com/developer/orbs/orb/circleci/path-filtering) — only builds changed services |
 
-### Feature Showcase
+### How It Works
 
 ```mermaid
 flowchart TD
-    A[Push to main] --> B{Path Filtering}
-    B -->|api/ changed| C[API Tests - 4 containers]
-    B -->|worker/ changed| D[Worker Tests - 2 containers]
-    B -->|web/ changed| E[Web Tests - 2 containers]
-    B -->|shared/ changed| F[All Services]
+    A[Push to main] --> B[Dynamic Config<br/>Setup Workflow]
+    B --> C{Path Filtering:<br/>What changed?}
 
-    C --> G[Docker Build with DLC]
-    D --> G
-    E --> G
+    C -->|api/ changed| D[api-pipeline.yml]
+    C -->|worker/ changed| E[worker-pipeline.yml]
+    C -->|web/ changed| F[web-pipeline.yml]
+    C -->|shared/ changed| G[All service configs]
 
-    G --> H[Deploy with Markers]
+    D --> H[Test split across 4 containers]
+    E --> I[Test split across 2 containers]
+    F --> J[Test split across 2 containers]
+
+    H --> K[Docker Build with DLC]
+    I --> K
+    J --> K
+    K --> L[Deploy with Markers]
 
     style B fill:#3498db,color:#fff
-    style C fill:#2ecc71,color:#fff
-    style D fill:#2ecc71,color:#fff
-    style E fill:#2ecc71,color:#fff
-    style H fill:#f39c12,color:#fff
+    style C fill:#9b59b6,color:#fff
+    style H fill:#2ecc71,color:#fff
+    style I fill:#2ecc71,color:#fff
+    style J fill:#2ecc71,color:#fff
+    style L fill:#f39c12,color:#fff
 ```
+
+One push triggers **one pipeline** which intelligently routes to the right service config. No wasted compute on unchanged services.
 
 ### Features Demonstrated
 
