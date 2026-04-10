@@ -138,3 +138,4 @@ if __name__ == "__main__":
     summary = worker.process_all()
     logger.info("Processing complete: %s", summary)
 # Worker service v0.1.1
+# v0.1.2
