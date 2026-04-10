@@ -23,3 +23,4 @@ def get_config(service_name: str) -> dict:
 def get_version() -> str:
     """Return the current application version."""
     return os.getenv("APP_VERSION", "0.1.0")
+# shared v0.1.1
