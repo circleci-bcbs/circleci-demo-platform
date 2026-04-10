@@ -171,3 +171,4 @@ def _fetch_items() -> tuple[list[dict], bool]:
 
 if __name__ == "__main__":
     app.run(host=config["host"], port=int(os.environ.get("WEB_PORT", 5002)), debug=config["debug"])
+# web v0.1.1
