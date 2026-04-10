@@ -133,14 +133,64 @@ Services are configured via environment variables:
 
 ## CircleCI Configuration
 
-CircleCI pipeline configuration is coming soon. The planned setup will demonstrate:
+This project uses **five separate pipeline definitions** to demonstrate different CircleCI capabilities:
 
-- Dynamic configuration with `setup` workflows and `path-filtering`
-- Per-service Docker image builds with layer caching
-- Test splitting across parallel containers
-- Flaky test detection and automatic reruns
-- Workspace and artifact management
-- Approval gates for deployments
+### Pipeline Definitions
+
+| Pipeline | Config File | Trigger | Key Features |
+|---|---|---|---|
+| `api-pipeline` | `.circleci/api-pipeline.yml` | All pushes | Test splitting (parallelism: 4), DLC, deploy markers via [URL orb](https://github.com/circleci-bcbs/shared-orbs), auto-rerun |
+| `worker-pipeline` | `.circleci/worker-pipeline.yml` | All pushes | Test splitting (parallelism: 2), DLC, auto-rerun |
+| `web-pipeline` | `.circleci/web-pipeline.yml` | All pushes | Test splitting (parallelism: 2), DLC |
+| `scale-demo` | `.circleci/scale-demo.yml` | Manual only | Parallelism: 50 — demonstrates instant compute scaling |
+| `dynamic-config` | `.circleci/config.yml` | All pushes | Setup workflow with [path-filtering](https://circleci.com/developer/orbs/orb/circleci/path-filtering) — only builds changed services |
+
+### Feature Showcase
+
+```mermaid
+flowchart TD
+    A[Push to main] --> B{Path Filtering}
+    B -->|api/ changed| C[API Tests - 4 containers]
+    B -->|worker/ changed| D[Worker Tests - 2 containers]
+    B -->|web/ changed| E[Web Tests - 2 containers]
+    B -->|shared/ changed| F[All Services]
+
+    C --> G[Docker Build with DLC]
+    D --> G
+    E --> G
+
+    G --> H[Deploy with Markers]
+
+    style B fill:#3498db,color:#fff
+    style C fill:#2ecc71,color:#fff
+    style D fill:#2ecc71,color:#fff
+    style E fill:#2ecc71,color:#fff
+    style H fill:#f39c12,color:#fff
+```
+
+### Features Demonstrated
+
+| Feature | How | Docs |
+|---|---|---|
+| **Dynamic Config** | `config.yml` setup workflow detects changed dirs, triggers only affected services | [Dynamic Config](https://circleci.com/docs/guides/orchestrate/dynamic-config/) |
+| **Test Splitting** | `circleci tests split --split-by=timings` across parallel containers | [Parallelism](https://circleci.com/docs/guides/optimize/parallelism-faster-jobs/) |
+| **Flaky Test Detection** | 5 intentionally flaky tests + `max_auto_reruns: 5` generates Insights data | [Flaky Tests](https://circleci.com/docs/guides/insights/flaky-tests/) |
+| **Docker Layer Caching** | `setup_remote_docker: docker_layer_caching: true` on build jobs | [DLC](https://circleci.com/docs/guides/optimize/docker-layer-caching/) |
+| **Parallelism at Scale** | `scale-demo.yml` runs 50 containers simultaneously | [Resource Classes](https://circleci.com/docs/guides/execution-managed/resource-class-overview/) |
+| **Deploy Markers** | Track deployments in the Deploys UI with plan/update/finalize | [Deploy Markers](https://circleci.com/docs/guides/deploy/configure-deploy-markers/) |
+| **URL Orbs** | Shared orb from [circleci-bcbs/shared-orbs](https://github.com/circleci-bcbs/shared-orbs) for cross-project reuse | [URL Orbs](https://circleci.com/docs/orbs/author/create-test-and-use-url-orbs/) |
+| **Multi-Pipeline** | 5 pipeline definitions in one project, each with its own config | [Pipelines](https://circleci.com/docs/guides/orchestrate/pipelines/) |
+| **Auto-Reruns** | Automatic retry on flaky test failure (up to 5 times) | [Auto-Reruns](https://circleci.com/docs/guides/orchestrate/automatic-reruns/) |
+| **Test Results** | `store_test_results` feeds Insights with JUnit XML data | [Test Insights](https://circleci.com/docs/guides/insights/test-insights/) |
+
+### Orbs Used
+
+| Orb | Type | Purpose |
+|---|---|---|
+| [`circleci/python@2.1.1`](https://circleci.com/developer/orbs/orb/circleci/python) | Registry | Python dependency install with caching |
+| [`circleci/docker@2.8.2`](https://circleci.com/developer/orbs/orb/circleci/docker) | Registry | Docker build utilities |
+| [`circleci/path-filtering@3.0.0`](https://circleci.com/developer/orbs/orb/circleci/path-filtering) | Registry | Monorepo path detection for dynamic config |
+| [`bcbsm-platform-tools`](https://github.com/circleci-bcbs/shared-orbs) | URL | Shared deploy markers, notifications, executors |
 
 ## License
 
