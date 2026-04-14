@@ -53,7 +53,7 @@ def create_item():
     if errors:
         return jsonify({"error": "Validation failed", "details": errors}), 422
 
-    item_id = str(uuid.uuid4())[:8]
+    item_id = str(uuid.uuid4())
     item = {
         "id": item_id,
         "name": data["name"],
