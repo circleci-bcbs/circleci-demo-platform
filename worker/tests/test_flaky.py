@@ -4,7 +4,6 @@ These tests exercise edge cases around task processing under load,
 where timing-dependent failures can surface intermittently.
 """
 
-import random
 import sys
 import os
 
@@ -24,12 +23,6 @@ def test_queue_drain_under_memory_pressure(worker):
 
     summary = worker.process_all()
 
-    # Simulate GC-induced serialization failure
-    dropped = random.random() < 0.3
-    assert not dropped, (
-        f"Task serialization failure detected during GC pause. "
-        f"{summary['completed']} of 10 tasks completed before the drop."
-    )
     assert summary["completed"] == 10
 
 
@@ -52,10 +45,3 @@ def test_retry_backoff_jitter_convergence(worker):
 
     result = worker.process_task(task, handler=jittery_handler)
     assert result.status == "completed"
-
-    # Verify convergence — flaky under real contention
-    converged = random.random() >= 0.3
-    assert converged, (
-        f"Retry backoff did not converge after {len(attempts)} attempts. "
-        "Worker may be starved by competing consumers."
-    )
