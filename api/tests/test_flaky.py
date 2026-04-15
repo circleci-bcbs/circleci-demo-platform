@@ -38,14 +38,10 @@ def test_race_condition_on_write(client):
     resp = client.post(
         "/items", data=json.dumps(payload), content_type="application/json"
     )
+    assert resp.status_code == 201
     data = resp.get_json()
-
-    # Simulate the race window
-    collision_detected = random.random() < 0.3
-    assert not collision_detected, (
-        f"ID collision detected for item '{data['id']}'. "
-        "Concurrent insert produced a duplicate key — retry may be required."
-    )
+    assert "id" in data, "Response missing 'id' field — possible collision or failed insert"
+    assert data["name"] == "Concurrent Item"
 
 
 def test_connection_pool_recovery(client):
