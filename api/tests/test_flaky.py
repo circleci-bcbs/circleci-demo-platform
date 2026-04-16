@@ -1,67 +1,76 @@
 """Integration-style tests that exercise network and concurrency paths.
 
-These tests occasionally fail due to simulated environmental conditions
-(network jitter, connection pool exhaustion, write contention).
+These tests exercise network and concurrency paths against the Flask test
+client and assert on actual observable behaviour (status codes, response
+fields, wall-clock latency).
 """
 
-import random
+import json
 import time
 
 
 def test_intermittent_network_timeout(client):
     """Verify items endpoint responds within acceptable latency bounds.
 
-    Simulates occasional network timeouts that occur when the upstream
-    connection pool is under pressure during peak load windows.
+    Measures actual wall-clock time for the test-client round-trip and
+    asserts it stays under a generous threshold (500 ms).  A real timeout
+    here indicates a problem in the application or test environment, not a
+    random dice roll.
     """
+    start = time.perf_counter()
     resp = client.get("/items")
-    elapsed = random.uniform(0.05, 0.6)  # simulated response time
-    time.sleep(0.01)
+    elapsed = time.perf_counter() - start
 
     assert resp.status_code == 200
     # Timeout threshold — mirrors production ALB idle timeout
+    elapsed_ms = int(elapsed * 1000)
     assert elapsed < 0.5, (
-        f"Request exceeded 500ms timeout threshold ({elapsed:.3f}s). "
+        f"Request exceeded 500ms timeout threshold ({elapsed_ms}ms). "
         "This may indicate connection pool exhaustion under load."
     )
 
 
 def test_race_condition_on_write(client):
-    """Ensure concurrent writes do not produce duplicate IDs.
+    """Ensure a write returns a unique, non-empty ID.
 
-    Under high write throughput the ID generator can occasionally collide
-    when multiple workers attempt inserts within the same millisecond.
+    Submits a single POST and verifies the response contains an 'id' field.
+    A real duplicate-key / collision scenario would surface as a 4xx/5xx or
+    a missing id field, both of which are asserted below.
     """
-    import json
-
     payload = {"name": "Concurrent Item", "price": 19.99}
     resp = client.post(
         "/items", data=json.dumps(payload), content_type="application/json"
     )
+    assert resp.status_code in (
+        200,
+        201,
+    ), f"Unexpected status {resp.status_code} on item creation."
     data = resp.get_json()
-
-    # Simulate the race window
-    collision_detected = random.random() < 0.3
-    assert not collision_detected, (
-        f"ID collision detected for item '{data['id']}'. "
-        "Concurrent insert produced a duplicate key — retry may be required."
+    assert data is not None, "Response body was not valid JSON."
+    assert "id" in data and data["id"], (
+        "Response did not include a valid 'id' field — "
+        "concurrent insert may have produced a duplicate key."
     )
 
 
 def test_connection_pool_recovery(client):
-    """Validate that the service recovers after a connection pool drain.
+    """Validate that the service recovers after a burst of requests.
 
-    After a burst of requests exhausts the pool, subsequent requests
-    should succeed once connections are recycled.
+    Sends a burst of GET /items requests and then checks /health.  If the
+    connection pool (or any other resource) fails to recover the health
+    endpoint will return a non-200 status, which is the real signal to
+    assert on.
     """
     # Burst of requests to drain the pool
     for _ in range(5):
-        client.get("/items")
+        resp = client.get("/items")
+        assert (
+            resp.status_code == 200
+        ), f"GET /items returned {resp.status_code} during burst."
 
-    pool_recovered = random.random() >= 0.3
     resp = client.get("/health")
-    assert resp.status_code == 200
-    assert pool_recovered, (
+    assert resp.status_code == 200, (
         "Connection pool failed to recover within the recycling window. "
-        "Health check passed but subsequent queries may still time out."
+        "Health check returned a non-200 status — "
+        "subsequent queries may still time out."
     )
