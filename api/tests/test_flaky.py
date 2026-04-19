@@ -34,18 +34,19 @@ def test_race_condition_on_write(client):
     """
     import json
 
-    payload = {"name": "Concurrent Item", "price": 19.99}
-    resp = client.post(
-        "/items", data=json.dumps(payload), content_type="application/json"
-    )
-    data = resp.get_json()
-
-    # Simulate the race window
-    collision_detected = random.random() < 0.3
-    assert not collision_detected, (
-        f"ID collision detected for item '{data['id']}'. "
-        "Concurrent insert produced a duplicate key — retry may be required."
-    )
+    ids = set()
+    for _ in range(5):
+        payload = {"name": "Concurrent Item", "price": 19.99}
+        resp = client.post(
+            "/items", data=json.dumps(payload), content_type="application/json"
+        )
+        assert resp.status_code in (200, 201)
+        data = resp.get_json()
+        assert data["id"] not in ids, (
+            f"ID collision detected: '{data['id']}' was already assigned. "
+            "Concurrent insert produced a duplicate key — retry may be required."
+        )
+        ids.add(data["id"])
 
 
 def test_connection_pool_recovery(client):
