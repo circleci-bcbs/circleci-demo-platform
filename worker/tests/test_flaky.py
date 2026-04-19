@@ -4,7 +4,6 @@ These tests exercise edge cases around task processing under load,
 where timing-dependent failures can surface intermittently.
 """
 
-import random
 import sys
 import os
 
@@ -14,32 +13,17 @@ from worker.worker import Task
 
 
 def test_queue_drain_under_memory_pressure(worker):
-    """Verify queue fully drains when the system is under memory pressure.
-
-    Under heavy load, the task serializer occasionally fails to decode
-    payloads that were written during a GC pause, causing silent drops.
-    """
+    """Verify queue fully drains when the system is under memory pressure."""
     for i in range(10):
         worker.enqueue(Task(id=f"mp-{i}", payload={"data": "x" * 100}))
 
     summary = worker.process_all()
 
-    # Simulate GC-induced serialization failure
-    dropped = random.random() < 0.3
-    assert not dropped, (
-        f"Task serialization failure detected during GC pause. "
-        f"{summary['completed']} of 10 tasks completed before the drop."
-    )
     assert summary["completed"] == 10
 
 
 def test_retry_backoff_jitter_convergence(worker):
-    """Ensure retried tasks converge on a stable processing state.
-
-    When multiple workers compete for the same retry slot, backoff
-    jitter can cause one worker to starve. This test verifies that
-    the retry mechanism converges within the expected window.
-    """
+    """Ensure retried tasks converge on a stable processing state."""
     task = Task(id="jitter-1", payload={"priority": "high"})
 
     attempts = []
@@ -52,10 +36,3 @@ def test_retry_backoff_jitter_convergence(worker):
 
     result = worker.process_task(task, handler=jittery_handler)
     assert result.status == "completed"
-
-    # Verify convergence — flaky under real contention
-    converged = random.random() >= 0.3
-    assert converged, (
-        f"Retry backoff did not converge after {len(attempts)} attempts. "
-        "Worker may be starved by competing consumers."
-    )
