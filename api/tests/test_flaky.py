@@ -58,10 +58,5 @@ def test_connection_pool_recovery(client):
     for _ in range(5):
         client.get("/items")
 
-    pool_recovered = random.random() >= 0.3
     resp = client.get("/health")
     assert resp.status_code == 200
-    assert pool_recovered, (
-        "Connection pool failed to recover within the recycling window. "
-        "Health check passed but subsequent queries may still time out."
-    )
