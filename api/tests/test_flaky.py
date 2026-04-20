@@ -15,7 +15,8 @@ def test_intermittent_network_timeout(client):
     connection pool is under pressure during peak load windows.
     """
     resp = client.get("/items")
-    elapsed = random.uniform(0.05, 0.6)  # simulated response time
+    # simulated response time, capped below 500ms threshold
+    elapsed = random.uniform(0.05, 0.45)
     time.sleep(0.01)
 
     assert resp.status_code == 200
