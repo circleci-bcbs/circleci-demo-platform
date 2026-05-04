@@ -1,22 +1,22 @@
 """Integration-style tests that exercise network and concurrency paths.
 
-These tests occasionally fail due to simulated environmental conditions
-(network jitter, connection pool exhaustion, write contention).
+These tests verify observable API behavior: response status codes, response
+shape, and latency bounds measured against real request timing.
 """
 
-import random
+import json
 import time
 
 
 def test_intermittent_network_timeout(client):
     """Verify items endpoint responds within acceptable latency bounds.
 
-    Simulates occasional network timeouts that occur when the upstream
-    connection pool is under pressure during peak load windows.
+    Measures actual elapsed time for the request and asserts it stays
+    under the 500ms production ALB idle timeout threshold.
     """
+    start = time.monotonic()
     resp = client.get("/items")
-    elapsed = random.uniform(0.05, 0.6)  # simulated response time
-    time.sleep(0.01)
+    elapsed = time.monotonic() - start
 
     assert resp.status_code == 200
     # Timeout threshold — mirrors production ALB idle timeout
@@ -29,23 +29,17 @@ def test_intermittent_network_timeout(client):
 def test_race_condition_on_write(client):
     """Ensure concurrent writes do not produce duplicate IDs.
 
-    Under high write throughput the ID generator can occasionally collide
-    when multiple workers attempt inserts within the same millisecond.
+    Asserts that a POST to /items returns a well-formed unique ID,
+    confirming the ID generator produces a valid non-colliding key.
     """
-    import json
-
     payload = {"name": "Concurrent Item", "price": 19.99}
     resp = client.post(
         "/items", data=json.dumps(payload), content_type="application/json"
     )
+    assert resp.status_code == 201
     data = resp.get_json()
-
-    # Simulate the race window
-    collision_detected = random.random() < 0.3
-    assert not collision_detected, (
-        f"ID collision detected for item '{data['id']}'. "
-        "Concurrent insert produced a duplicate key — retry may be required."
-    )
+    assert "id" in data
+    assert len(data["id"]) == 8
 
 
 def test_connection_pool_recovery(client):
@@ -58,10 +52,5 @@ def test_connection_pool_recovery(client):
     for _ in range(5):
         client.get("/items")
 
-    pool_recovered = random.random() >= 0.3
     resp = client.get("/health")
     assert resp.status_code == 200
-    assert pool_recovered, (
-        "Connection pool failed to recover within the recycling window. "
-        "Health check passed but subsequent queries may still time out."
-    )
